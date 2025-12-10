@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>The Watcher - Night Shift</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --phosphor-main: #afbea2; /* Old LCD Greenish-White */
+            --phosphor-dim: #546a56;
+            --alert-red: #ff3333;
+            --scan-color: rgba(18, 16, 16, 0.5);
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #050505; 
+            font-family: 'Share Tech Mono', monospace; 
+            user-select: none; 
+            color: var(--phosphor-main);
+        }
+
+        /* --- CRT / CCTV Effects --- */
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .vignette {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.8) 100%);
+            pointer-events: none;
+            z-index: 51;
+        }
+
+        /* Subtle screen flicker */
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            5% { opacity: 0.95; }
+            10% { opacity: 0.9; }
+            15% { opacity: 0.95; }
+            100% { opacity: 0.97; }
+        }
+        #ui-layer { animation: flicker 0.15s infinite; }
+
+        /* --- Main UI Layer --- */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            z-index: 10;
+            padding: 20px;
+            box-sizing: border-box;
+            text-shadow: 0 0 5px var(--phosphor-main);
+        }
+
+        /* Top Bar: Camera Info */
+        #header {
+            display: flex;
+            justify-content: space-between;
+            border-top: 2px solid var(--phosphor-main);
+            padding-top: 5px;
+            font-size: 1.2rem;
+        }
+
+        .rec-dot {
+            height: 15px; width: 15px;
+            background-color: var(--alert-red);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 10px var(--alert-red);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Door Status HUD */
+        #door-hud {
+            display: flex;
+            justify-content: center;
+            gap: 50px;
+            margin-top: 10px;
+        }
+
+        .door-panel {
+            border: 1px solid var(--phosphor-main);
+            background: rgba(0, 20, 0, 0.6);
+            padding: 10px 20px;
+            text-align: center;
+            min-width: 150px;
+        }
+
+        .door-label {
+            font-size: 0.8rem;
+            color: var(--phosphor-dim);
+            border-bottom: 1px solid var(--phosphor-dim);
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .door-status { 
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        
+        .open { color: var(--alert-red); text-shadow: 0 0 8px var(--alert-red); }
+        .closed { color: var(--phosphor-main); text-shadow: 0 0 8px var(--phosphor-main); }
+
+        /* Controls / Footer */
+        #controls {
+            text-align: center;
+            font-size: 0.8em;
+            color: var(--phosphor-dim);
+            border-bottom: 2px solid var(--phosphor-main);
+            padding-bottom: 5px;
+        }
+        
+        .key {
+            border: 1px solid var(--phosphor-dim);
+            padding: 2px 6px;
+            margin: 0 2px;
+            color: var(--phosphor-main);
+        }
+
+        /* --- Intro / Pause Overlay --- */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            z-index: 100;
+            cursor: pointer;
+        }
+
+        .terminal-window {
+            width: 600px;
+            border: 2px solid var(--phosphor-main);
+            padding: 20px;
+            background: rgba(0, 10, 0, 0.9);
+            box-shadow: 0 0 20px rgba(175, 190, 162, 0.2);
+        }
+
+        h1 {
+            margin: 0 0 20px 0;
+            font-size: 2em;
+            border-bottom: 1px dashed var(--phosphor-main);
+            padding-bottom: 10px;
+            text-align: center;
+        }
+
+        .briefing-text {
+            line-height: 1.6;
+            font-size: 1rem;
+            margin-bottom: 30px;
+        }
+
+        .warning { color: var(--alert-red); }
+
+        .start-prompt {
+            text-align: center;
+            animation: blink 1s infinite;
+            font-size: 1.2rem;
+            margin-top: 20px;
+            background: var(--phosphor-main);
+            color: #000;
+            padding: 5px;
+        }
+        
+        /* Crosshair */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 4px; height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            transform: translate(-50%, -50%);
+            z-index: 40;
+            border-radius: 50%;
+        }
+
+        #overlay-status { font-size: 2rem; color: var(--alert-red); margin-bottom: 10px; display: none;}
+
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+
+    <div id="ui-layer">
+        <div id="header">
+            <div>CAM_04 [CORRIDOR]</div>
+            <div id="clock">00:00:00</div>
+            <div><span class="rec-dot"></span> REC</div>
+        </div>
+
+        <div id="door-hud">
+            <div class="door-panel">
+                <span class="door-label">SEC_DOOR_L [Q]</span>
+                <span id="status-left" class="door-status open">OPEN</span>
+            </div>
+            <div class="door-panel">
+                <span class="door-label">SEC_DOOR_R [E]</span>
+                <span id="status-right" class="door-status open">OPEN</span>
+            </div>
+        </div>
+
+        <div id="controls">
+            SYSTEM CONTROLS: 
+            <span class="key">Q</span> LEFT DOOR // 
+            <span class="key">E</span> RIGHT DOOR // 
+            <span class="key">LEFT CLICK</span> FLASHLIGHT //
+            <span class="key">MOUSE</span> LOOK
+        </div>
+    </div>
+
+    <div id="overlay">
+        <div class="terminal-window">
+            <h1>SECURITY TERMINAL V.1.0</h1>
+            
+            <div id="overlay-status">CONNECTION LOST</div>
+
+            <div class="briefing-text" id="briefing">
+                > SYSTEM BOOT SEQUENCE INITIATED...<br>
+                > LOADING NIGHT SHIFT PROTOCOLS...<br>
+                <br>
+                <span style="color:#fff">OBJECTIVE:</span> Survive until 06:00.<br>
+                <br>
+                <span style="color:#fff">THREAT ASSESSMENT:</span><br>
+                1. <span class="warning">ENTITY:</span> Hostile target moves in darkness. Moves instantly when unobserved.<br>
+                2. <span class="warning">DEFENSE:</span> Entity reacts to light. Shine flashlight directly to banish.<br>
+                3. <span class="warning">POWER:</span> Flashlight battery is limited. Use sparingly.<br>
+                4. <span class="warning">DOORS:</span> Do not keep doors closed unnecessarily. Systems are old.<br>
+            </div>
+
+            <div class="start-prompt" id="overlay-text">
+                > CLICK TO INITIALIZE SYSTEM <
+            </div>
+        </div>
+    </div>
+
+    <div id="crosshair"></div>
+    
+    <script>
+        function updateClock() {
+            const now = new Date();
+            // Game time simulation or real time
+            document.getElementById('clock').innerText = now.toLocaleTimeString('en-US', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Handle overlay text changes based on game state (since main.js modifies overlay-text)
+        // We use a MutationObserver to watch for changes main.js makes, 
+        // allowing us to keep the fancy CSS while main.js controls logic.
+        const targetNode = document.getElementById('overlay-text');
+        const observer = new MutationObserver((mutationsList) => {
+            for(const mutation of mutationsList) {
+                if (mutation.type === 'childList') {
+                    const text = targetNode.innerText;
+                    const statusDiv = document.getElementById('overlay-status');
+                    const briefing = document.getElementById('briefing');
+                    
+                    if (text.includes("PAUSED")) {
+                        statusDiv.style.display = 'block';
+                        statusDiv.innerText = "SIGNAL PAUSED";
+                        statusDiv.style.color = "#afbea2";
+                        briefing.style.display = 'none'; // Hide briefing on pause
+                    } else if (text.includes("GAME OVER")) {
+                        statusDiv.style.display = 'block';
+                        statusDiv.innerText = "SIGNAL LOST // TERMINATED";
+                        statusDiv.style.color = "#ff3333";
+                        briefing.style.display = 'none';
+                    } else if (text.includes("START")) {
+                        statusDiv.style.display = 'none';
+                        briefing.style.display = 'block'; // Show briefing on start
+                    }
+                }
+            }
+        });
+        observer.observe(targetNode, { childList: true });
+    </script>
+
+    <script type="module" src="./main.js"></script>
+</body>
+</html>
