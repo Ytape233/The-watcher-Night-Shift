@@ -9,6 +9,7 @@ let scene, camera, renderer;
 let leftDoor, rightDoor;
 let ceilingLight, bulbMat, flashLight;
 let flashlightSystem;
+let performanceMode = false;
 
 const gameState = {
     isPlaying: false,
@@ -34,7 +35,10 @@ function init() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 5, 5);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ 
+        antialias: !performanceMode, // Disable AA in perf mode for jagged edges
+        powerPreference: "high-performance"
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -412,7 +416,7 @@ function init() {
 
     flashlightSystem = new FlashlightSystem(camera, flashLight);
 
-    initEnemy(scene);
+    initEnemy(scene, performanceMode); // Pass performanceMode
     setupInputs();
     window.addEventListener('resize', onWindowResize, false);
 }
@@ -443,6 +447,69 @@ function createDoor(xPos, material) { // Add material parameter
     doorGroup.position.set(xPos, 6, -1);
     scene.add(doorGroup);
     return doorGroup;
+}
+
+// Create the Toggle Function
+function togglePerformanceMode() {
+    performanceMode = !performanceMode;
+    const overlayStatus = document.getElementById('overlay-status');
+    
+    if (performanceMode) {
+        // --- RETRO MODE ON ---
+        
+        // 1. Pixelate: Set render size to half of window, but stretch CSS to full
+        renderer.setSize(window.innerWidth / 4, window.innerHeight / 4, false);
+        renderer.domElement.style.width = "100%";
+        renderer.domElement.style.height = "100%";
+        
+        // 2. Disable Shadows (Huge FPS boost)
+        renderer.shadowMap.enabled = false;
+        scene.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = false;
+                child.receiveShadow = false;
+            }
+            if (child.isLight) {
+                child.castShadow = false;
+            }
+        });
+
+        // 3. Disable Fog (Optional, makes it look clearer/older)
+        // scene.fog.density = 0;
+
+        console.log("MODE: PROTOTYPE (LOW RES)");
+        if(overlayStatus) {
+            overlayStatus.innerText = "SYSTEM: SAFE MODE (LOW RES)";
+            overlayStatus.style.display = 'block';
+            setTimeout(() => overlayStatus.style.display = 'none', 2000);
+        }
+
+    } else {
+        // --- HIGH QUALITY MODE ---
+        
+        renderer.setSize(window.innerWidth, window.innerHeight, true);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
+        scene.traverse((child) => {
+            // Re-enable shadows based on your specific logic
+            // This is a rough re-enable, specific objects might need tuning
+            if (child.isMesh && child.name !== 'Skybox') { 
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+            if (child.isLight && child.intensity > 0) {
+                child.castShadow = true;
+            }
+        });
+        
+        console.log("MODE: HIGH FIDELITY");
+        if(overlayStatus) {
+            overlayStatus.innerText = "SYSTEM: HD LINK ESTABLISHED";
+            overlayStatus.style.display = 'block';
+            setTimeout(() => overlayStatus.style.display = 'none', 2000);
+        }
+    }
 }
 
 function setupInputs() {
@@ -518,6 +585,12 @@ function setupInputs() {
                 updateDoorVisuals(); 
             }
         }
+
+        // Toggle P for Prototype/Performance Mode
+        if (e.code === 'KeyP') {
+            togglePerformanceMode();
+        }
+
     });
 
     // --- Mouse click controls flashlight model ---

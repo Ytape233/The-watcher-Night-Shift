@@ -22,7 +22,7 @@ const ghostState = {
 };
 
 // 1. Initialization
-export function initEnemy(scene) {
+export function initEnemy(scene, isLowSpec = false) {
     const textureLoader = new THREE.TextureLoader();
     const specificTexture = textureLoader.load('./assets/models/ghost.png');
     specificTexture.colorSpace = THREE.SRGBColorSpace;
@@ -59,7 +59,7 @@ export function initEnemy(scene) {
         });
     });
 
-    createAtmosphereParticles(scene);
+    createAtmosphereParticles(scene, isLowSpec);
 }
 
 // 2. Update Logic
@@ -370,10 +370,14 @@ export function onGhostHitByDoor() {
     }
 }
 
-function createAtmosphereParticles(scene) {
+function createAtmosphereParticles(scene, isLowSpec = false) {
     const geometry = new THREE.BufferGeometry();
     const vertices = [];
-    for (let i = 0; i < 1000000; i++) {
+
+    // Now 'isLowSpec' is defined and valid
+    const count = isLowSpec ? 5000 : 50000; 
+
+    for (let i = 0; i < count; i++) {
         vertices.push((Math.random() - 0.5) * 80); 
         vertices.push((Math.random() - 0.5) * 40 + 3); 
         vertices.push((Math.random() - 0.5) * 80); 
