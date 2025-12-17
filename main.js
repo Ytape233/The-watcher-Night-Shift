@@ -24,6 +24,9 @@ const gameState = {
 
 const clock = new THREE.Clock();
 
+let touchStartX = 0;
+let touchStartY = 0;
+
 init();
 animate();
 
@@ -521,100 +524,171 @@ function togglePerformanceMode() {
 }
 
 function setupInputs() {
-
     const overlay = document.getElementById('overlay');
-    overlay.addEventListener('click', () => { 
-        // if is Game Over, restart instead of locking pointer
+
+    // 1. Unified Start Logic (Mouse & Touch)
+    const startGame = () => {
         if (gameState.isGameOver) {
             restartGame();
-            return; // end here
+            return;
         }
         
-        // only when not in Game Over state (i.e., in the start menu), click to lock the mouse and start the game
-        document.body.requestPointerLock(); 
-    });
+        if (window.innerWidth > 1024) {
+            // Attempt pointer lock (PC)
+            document.body.requestPointerLock();
+        } else {
+            gameState.isPlaying = true;
+            overlay.style.display = 'none';
+            overlayText.innerText = "";
+        }
+        
+    };
 
+    overlay.addEventListener('click', startGame);
+    overlay.addEventListener('touchstart', (e) => {
+        // Prevent ghost clicks
+        e.preventDefault(); 
+        startGame();
+    }, { passive: false });
+
+    // 2. PC Pointer Lock Events
     document.addEventListener('pointerlockchange', () => {
         if (document.pointerLockElement === document.body) {
             gameState.isPlaying = true;
             overlay.style.display = 'none';
         } else {
-            gameState.isPlaying = false;
-            overlay.style.display = 'flex';
-            // Only show PAUSED when the game is not over
-            if (!gameState.isGameOver) {
-                document.getElementById('overlay-text').innerText = "PAUSED";
+            // Only pause if we are NOT on mobile (mobile doesn't use pointer lock)
+            // Simple check: if screen width is large, assume PC
+            if (window.innerWidth > 1024) {
+                gameState.isPlaying = false;
+                overlay.style.display = 'flex';
+                if (!gameState.isGameOver) {
+                    document.getElementById('overlay-text').innerText = "PAUSED";
+                }
             }
         }
     });
+
+    // 3. Camera Control (PC Mouse)
     document.addEventListener('mousemove', (event) => {
         if (!gameState.isPlaying) return;
-        camera.rotation.y -= event.movementX * 0.002;
-        camera.rotation.x -= event.movementY * 0.002;
-        camera.rotation.x = Math.max(-1, Math.min(1, camera.rotation.x));
+        // Only rotate if locked (PC) OR if we are forcing play state
+        if (document.pointerLockElement === document.body || window.innerWidth <= 1024) {
+             // On PC this works via pointer lock. On mobile we use touchmove below.
+             if (document.pointerLockElement === document.body) {
+                rotateCamera(event.movementX, event.movementY);
+             }
+        }
     });
 
+    // 4. Camera Control (Mobile Touch Drag)
+    document.addEventListener('touchstart', (e) => {
+        if (!gameState.isPlaying) return;
+        if (e.target.classList.contains('touch-btn')) return; // Don't look if hitting a button
+        
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!gameState.isPlaying) return;
+        if (e.target.classList.contains('touch-btn')) return; 
+
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+
+        const deltaX = touchX - touchStartX;
+        const deltaY = touchY - touchStartY;
+
+        // Sensitivity factor
+        rotateCamera(deltaX * 3, deltaY * 3);
+
+        touchStartX = touchX;
+        touchStartY = touchY;
+    });
+
+    // 5. Keyboard Controls
     document.addEventListener('keydown', (e) => {
         if (!gameState.isPlaying || gameState.isGameOver) return;
-
-        // --- Left door control (Q) ---
-        if(e.code === 'KeyQ') { 
-            // 1. If the door is already broken, key press is invalid, issue a warning
-            if (gameState.leftBroken) {
-                console.log("Left door is BROKEN! Cannot move.");
-                return;
-            }
-
-            // 2. Check if trying to close the door on the ghost
-            // Logic: currently open (gameState.leftOpen) + ghost is blocking the door (isGhostBlockingDoor)
-            if (gameState.leftOpen && isGhostBlockingDoor('left')) {
-                triggerDoorBreak('left'); // Trigger break logic
-            } else {
-                // Normal open/close door
-                gameState.leftOpen = !gameState.leftOpen;
-                // Mutual exclusion logic (keep as is)
-                if (!gameState.leftOpen && !gameState.rightOpen) gameState.rightOpen = true;
-                updateDoorVisuals(); 
-            }
-        }
-
-        // --- Right door control (E) ---
-        if(e.code === 'KeyE') { 
-            if (gameState.rightBroken) {
-                console.log("Right door is BROKEN! Cannot move.");
-                return;
-            }
-
-            if (gameState.rightOpen && isGhostBlockingDoor('right')) {
-                triggerDoorBreak('right');
-            } else {
-                gameState.rightOpen = !gameState.rightOpen;
-                if (!gameState.rightOpen && !gameState.leftOpen) gameState.leftOpen = true;
-                updateDoorVisuals(); 
-            }
-        }
-
-        // Toggle P for Prototype/Performance Mode
-        if (e.code === 'KeyP') {
-            togglePerformanceMode();
-        }
-
+        if(e.code === 'KeyQ') handleDoorAction('left');
+        if(e.code === 'KeyE') handleDoorAction('right');
+        if(e.code === 'KeyP') togglePerformanceMode();
     });
 
-    // --- Mouse click controls flashlight model ---
+    // 6. Mouse Flashlight
     document.addEventListener('mousedown', (e) => { 
-        if(gameState.isPlaying) {
-            // Trigger button press animation
-            flashlightSystem.pressButton();
-        }
+        if(gameState.isPlaying) flashlightSystem.pressButton();
+    });
+    document.addEventListener('mouseup', () => { 
+        if(gameState.isPlaying) flashlightSystem.releaseButton();
     });
 
-    document.addEventListener('mouseup', () => { 
-        if(gameState.isPlaying) {
-            // Trigger button release animation and toggle switch
-            flashlightSystem.releaseButton();
+    // --- 7. Mobile On-Screen Buttons ---
+    
+    // Helper to prevent default touch actions (scrolling/zooming)
+    const bindTouch = (id, startAction, endAction) => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        
+        el.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Stop double-firing click
+            if(gameState.isPlaying && !gameState.isGameOver) startAction();
+        });
+        
+        if(endAction) {
+            el.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if(gameState.isPlaying && !gameState.isGameOver) endAction();
+            });
         }
-    });
+    };
+
+    // Bind Buttons
+    bindTouch('btn-left', () => handleDoorAction('left'));
+    bindTouch('btn-right', () => handleDoorAction('right'));
+    bindTouch('btn-proto', () => togglePerformanceMode());
+    
+    // Flashlight (Hold/Release behavior)
+    bindTouch('btn-flash', 
+        () => flashlightSystem.pressButton(), 
+        () => flashlightSystem.releaseButton()
+    );
+}
+
+// --- Helper Functions ---
+
+function rotateCamera(moveX, moveY) {
+    camera.rotation.y -= moveX * 0.002;
+    camera.rotation.x -= moveY * 0.002;
+    camera.rotation.x = Math.max(-1, Math.min(1, camera.rotation.x));
+}
+
+function handleDoorAction(side) {
+    // Logic extracted from keydown event
+    const isLeft = side === 'left';
+    
+    // 1. Broken Check
+    if ((isLeft && gameState.leftBroken) || (!isLeft && gameState.rightBroken)) {
+        console.log(`${side} door is BROKEN!`);
+        return;
+    }
+
+    // 2. Door Break Check (Ghost Blocking)
+    const isOpen = isLeft ? gameState.leftOpen : gameState.rightOpen;
+    
+    if (isOpen && isGhostBlockingDoor(side)) {
+        triggerDoorBreak(side);
+    } else {
+        // 3. Normal Toggle
+        if (isLeft) {
+            gameState.leftOpen = !gameState.leftOpen;
+            if (!gameState.leftOpen && !gameState.rightOpen) gameState.rightOpen = true; // Mutual exclusion
+        } else {
+            gameState.rightOpen = !gameState.rightOpen;
+            if (!gameState.rightOpen && !gameState.leftOpen) gameState.leftOpen = true;
+        }
+        updateDoorVisuals(); 
+    }
 }
 
 function triggerDoorBreak(side) {
