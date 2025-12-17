@@ -24,8 +24,11 @@ const gameState = {
 
 const clock = new THREE.Clock();
 
+// --- Mobile Touch Variables ---
 let touchStartX = 0;
 let touchStartY = 0;
+let previousTouchX = 0;
+let previousTouchY = 0;
 
 init();
 animate();
@@ -33,13 +36,13 @@ animate();
 function init() {
     // 1. Initialize scene
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050505, 0.03); // Slightly lighter fog
+    scene.fog = new THREE.FogExp2(0x050505, 0.03); 
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 5, 5);
 
     renderer = new THREE.WebGLRenderer({ 
-        antialias: !performanceMode, // Disable AA in perf mode for jagged edges
+        antialias: !performanceMode,
         powerPreference: "high-performance"
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -50,89 +53,64 @@ function init() {
     // 2. Load textures
     const textureLoader = new THREE.TextureLoader();
     
-    // --- Load PBR floor textures (rough_wood) ---
+    // --- Load PBR floor textures ---
     const floorPath = './assets/textures/floor/rough_wood_';
+    const floorColor = textureLoader.load(floorPath + 'diff_1k.jpg');   
+    const floorNormal = textureLoader.load(floorPath + 'nor_gl_1k.jpg'); 
+    const floorRough = textureLoader.load(floorPath + 'rough_1k.jpg');  
+    const floorAO = textureLoader.load(floorPath + 'ao_1k.jpg');        
+    const floorDisp = textureLoader.load(floorPath + 'disp_1k.jpg');    
 
-    // Load all texture channels
-    const floorColor = textureLoader.load(floorPath + 'diff_1k.jpg');   // Diffuse/Color
-    const floorNormal = textureLoader.load(floorPath + 'nor_gl_1k.jpg'); // Normal map (OpenGL)
-    const floorRough = textureLoader.load(floorPath + 'rough_1k.jpg');  // Roughness
-    const floorAO = textureLoader.load(floorPath + 'ao_1k.jpg');        // Ambient Occlusion
-    const floorDisp = textureLoader.load(floorPath + 'disp_1k.jpg');    // Displacement/Height
-
-    // Set texture wrapping and repeat for all floor textures
     const floorTextures = [floorColor, floorNormal, floorRough, floorAO, floorDisp];
-    
     floorTextures.forEach(t => {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        // Floor is large (100x100), so use high repeat count to avoid giant wood grain
         t.repeat.set(30, 30); 
     });
-
-    // Color texture must use sRGB color space
     floorColor.colorSpace = THREE.SRGBColorSpace;
 
-    // Define floor material with PBR properties
     const floorMat = new THREE.MeshStandardMaterial({ 
         map: floorColor,
-        
         normalMap: floorNormal,
-        normalScale: new THREE.Vector2(1, 1), // Adjust bump intensity
-        
+        normalScale: new THREE.Vector2(1, 1), 
         roughnessMap: floorRough,
-        roughness: 1.0, // Used with roughnessMap
-        
+        roughness: 1.0, 
         aoMap: floorAO,
         aoMapIntensity: 1.0,
-        
         displacementMap: floorDisp,
-        displacementScale: 0.1, // Slight surface variation, too high causes clipping
-        
+        displacementScale: 0.1, 
         side: THREE.DoubleSide
     });
 
-    // --- Load PBR wall textures (castle brick) ---
+    // --- Load PBR wall textures ---
     const path = './assets/textures/wall1/castle_brick_02_white_';
-    
-    const wallColor = textureLoader.load(path + 'diff_1k.jpg');   // Diffuse/Color
-    const wallNormal = textureLoader.load(path + 'nor_gl_1k.jpg'); // Normal map (use OpenGL version)
-    const wallRough = textureLoader.load(path + 'rough_1k.jpg');  // Roughness
-    const wallAO = textureLoader.load(path + 'ao_1k.jpg');        // Ambient Occlusion
-    const wallDisp = textureLoader.load(path + 'disp_1k.jpg');    // Displacement/Height
+    const wallColor = textureLoader.load(path + 'diff_1k.jpg');   
+    const wallNormal = textureLoader.load(path + 'nor_gl_1k.jpg'); 
+    const wallRough = textureLoader.load(path + 'rough_1k.jpg');  
+    const wallAO = textureLoader.load(path + 'ao_1k.jpg');        
+    const wallDisp = textureLoader.load(path + 'disp_1k.jpg');    
 
-    // Set texture wrapping and repeat - all textures must align perfectly
     const wallTextures = [wallColor, wallNormal, wallRough, wallAO, wallDisp];
-    
     wallTextures.forEach(t => {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.repeat.set(2, 2); // Match original wall texture density
+        t.repeat.set(2, 2); 
     });
-
-    // Color texture uses sRGB space, math textures (normal/roughness) stay in Linear space
     wallColor.colorSpace = THREE.SRGBColorSpace;
 
-    // Create PBR wall material using MeshStandardMaterial
     const wallMat = new THREE.MeshStandardMaterial({ 
         map: wallColor,
-        
-        normalMap: wallNormal,      // Add surface detail and bump
-        normalScale: new THREE.Vector2(1, 1), // Adjust bump intensity
-        
-        roughnessMap: wallRough,    // Control surface smoothness variation
-        roughness: 1.0,             // Base roughness, used with roughnessMap
-        
-        aoMap: wallAO,              // Add shadow details in crevices
+        normalMap: wallNormal,      
+        normalScale: new THREE.Vector2(1, 1), 
+        roughnessMap: wallRough,    
+        roughness: 1.0,             
+        aoMap: wallAO,              
         aoMapIntensity: 1.0,
-        
-        displacementMap: wallDisp,  // Real geometric displacement
-        displacementScale: 0.15,    // Sensitive value, too high causes artifacts
-        
+        displacementMap: wallDisp,  
+        displacementScale: 0.15,    
         side: THREE.DoubleSide
     });
 
-    // --- Load concrete wall textures (Dirty Concrete) for front wall ---
+    // --- Load concrete wall textures ---
     const concretePath = './assets/textures/wall2/dirty_concrete_';
-    
     const concColor = textureLoader.load(concretePath + 'diff_1k.jpg');
     const concNormal = textureLoader.load(concretePath + 'nor_gl_1k.jpg');
     const concRough = textureLoader.load(concretePath + 'rough_1k.jpg');
@@ -146,7 +124,6 @@ function init() {
     });
     concColor.colorSpace = THREE.SRGBColorSpace;
 
-    // Define concrete material
     const concreteMat = new THREE.MeshStandardMaterial({ 
         map: concColor,
         normalMap: concNormal,
@@ -155,181 +132,131 @@ function init() {
         aoMap: concAO,
         aoMapIntensity: 1.5,
         displacementMap: concDisp,
-        displacementScale: 0.15, // Less displacement for concrete
+        displacementScale: 0.15,
         side: THREE.DoubleSide
     });
 
-    // --- Load door PBR textures (Rusty Metal Grid) ---
+    // --- Load door PBR textures ---
     const doorPath = './assets/textures/door/rusty_metal_grid_';
-
     const doorColor = textureLoader.load(doorPath + 'diff_1k.jpg');
     const doorNormal = textureLoader.load(doorPath + 'nor_gl_1k.jpg');
     const doorRough = textureLoader.load(doorPath + 'rough_1k.jpg');
     const doorAO = textureLoader.load(doorPath + 'ao_1k.jpg');
     const doorDisp = textureLoader.load(doorPath + 'disp_1k.jpg');
-    const doorMetal = textureLoader.load(doorPath + 'arm_1k.jpg'); // ARM texture for metalness
+    const doorMetal = textureLoader.load(doorPath + 'arm_1k.jpg'); 
 
     const doorTextures = [doorColor, doorNormal, doorRough, doorAO, doorDisp, doorMetal];
-
     doorTextures.forEach(t => {
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        // Door is 8 wide x 14 tall
-        // Use high repeat to avoid stretching the grid pattern
         t.repeat.set(2, 4); 
     });
-
     doorColor.colorSpace = THREE.SRGBColorSpace;
 
-    // Create door material with metallic properties
     const doorMat = new THREE.MeshStandardMaterial({
         map: doorColor,
-        
         normalMap: doorNormal,
         normalScale: new THREE.Vector2(1, 1),
-
         roughnessMap: doorRough,
         roughness: 1.0, 
-
         aoMap: doorAO,
         aoMapIntensity: 1.0,
-        
-        // For rusty metal, metalnessMap is important
-        // ARM texture: R=AO, G=Roughness, B=Metalness
         metalnessMap: doorMetal, 
         metalness: 1.0, 
-
         displacementMap: doorDisp,
-        displacementScale: 0.2, // Grid door can have stronger bump
-
+        displacementScale: 0.2, 
         side: THREE.DoubleSide
     });
 
     // --- Load player chair model ---
     const mtlLoader = new MTLLoader();
-    
     mtlLoader.load('./assets/models/chair.mtl', function (materials) {
         materials.preload();
-        
         const objLoader = new OBJLoader();
         objLoader.setMaterials(materials);
         
         objLoader.load('./assets/models/chair.obj', function (object) {
-            
-            // 1. Manual texture loading and application (prevent black model due to MTL path issues)
             const chairTex = textureLoader.load('./assets/models/chair.png'); 
             chairTex.colorSpace = THREE.SRGBColorSpace;
 
             object.traverse(function (child) {
                 if (child.isMesh) {
-                    child.material.map = chairTex; // Force assign texture
-                    child.castShadow = true;       // Chair casts shadow
-                    child.receiveShadow = true;    // Chair receives flashlight shadows
+                    child.material.map = chairTex; 
+                    child.castShadow = true;       
+                    child.receiveShadow = true;    
                 }
             });
 
-            // 2. Positioning
-            // Player is at (0, 5, 5), so chair is placed at (0, 2.20, 5) on the floor
             object.position.set(0, 2.20, 5);
-            
-            // 3. Rotation
-            // Math.PI (180 degrees) makes the chair face away from the window, showing the player's back (simulating the player just sat down)
-            // Or set to 0 to face the desk. Usually, chairs face the desk.
             object.rotation.y = Math.PI; 
-
-            // 4. Scaling
-            // OBJ model units are usually inconsistent. Adjust here if the chair is too big or too small.
             object.scale.set(2.0, 2.0, 2.0); 
-
             scene.add(object);
-            
         }, undefined, function(error) {
-            console.error("加载椅子出错:", error);
+            console.error("error loading chair model:", error);
         });
     });
     
-    // 3. Scene construction: modular room (solving "wall behind glass" and "door facing wall" issues)
-    
-    // --- A. Floor and ceiling ---
-    // Huge floor (including inside the room and outside the corridor)
+    // 3. Scene construction
     const bigFloor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100, 200, 200), floorMat);
     bigFloor.rotation.x = -Math.PI / 2;
     bigFloor.receiveShadow = true;
     scene.add(bigFloor);
 
-    // Huge ceiling (prevent light leakage)
     const hallCeiling = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), wallMat);
     hallCeiling.rotation.x = Math.PI / 2;
-    hallCeiling.position.set(0, 15, -5); // Cover the front corridor
+    hallCeiling.position.set(0, 15, -5); 
     scene.add(hallCeiling);
 
-    // --- B. Wall assembly ---
-    
-    // 1. Back wall (solid)
+    // Wall assembly
     const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 15, 100, 100), wallMat);
     backWall.position.set(0, 7.5, 15);
-    backWall.rotation.y = Math.PI; // Facing inside the room
+    backWall.rotation.y = Math.PI; 
     scene.add(backWall);
 
-    // 2. Front wall (with window opening)
-    // Room width 30 (-15 to 15), height 15. Window width 20 (-10 to 10), height 10 (from 5 to 15 above ground).
-    // We need to assemble 4 panels to surround this opening, or simply: left and right parts + low wall below window
-    
-    // Front wall - left part
     const frontWallLeft = new THREE.Mesh(new THREE.PlaneGeometry(5, 15), wallMat);
     frontWallLeft.position.set(-12.5, 7.5, -15);
     scene.add(frontWallLeft);
 
-    // Front wall - right part 
     const frontWallRight = new THREE.Mesh(new THREE.PlaneGeometry(5, 15), wallMat);
     frontWallRight.position.set(12.5, 7.5, -15);
     scene.add(frontWallRight);
 
-    // Front wall - low wall below window (y: 0 to 2)
     const frontWallBottom = new THREE.Mesh(new THREE.PlaneGeometry(20, 2), concreteMat);
     frontWallBottom.position.set(0, 1, -15);
     scene.add(frontWallBottom);
     
-    // Front wall - top beam above window (y: 12 to 15)
     const frontWallTop = new THREE.Mesh(new THREE.PlaneGeometry(20, 3), concreteMat);
     frontWallTop.position.set(0, 13.5, -15);
     scene.add(frontWallTop);
 
-    // Real glass window
     const glassGeo = new THREE.PlaneGeometry(20, 10);
     const glassMat = new THREE.MeshPhysicalMaterial({ 
-    color: 0xffffff,        // use white to avoid ghost color distortion
-    transmission: 1.0,      // Full transmission (core to glass appearance)
-    opacity: 1.0,           // Since transmission is used, opacity should be set to 1
-    transparent: true,      // Must be enabled to trigger transmission
-    roughness: 0.0,         // The smoother, the clearer
-    metalness: 0.0,         // Glass is usually non-metallic
-    ior: 1.5,               // Index of refraction (glass is about 1.5)
-    thickness: 0.1,         // Adds a bit of thickness feel
-    side: THREE.DoubleSide
+        color: 0xffffff,
+        transmission: 1.0,
+        opacity: 1.0,
+        transparent: true,
+        roughness: 0.0,
+        metalness: 0.0,
+        ior: 1.5,
+        thickness: 0.1,
+        side: THREE.DoubleSide
     });
     const windowPane = new THREE.Mesh(glassGeo, glassMat);
     windowPane.position.set(0, 7, -15);
-    windowPane.name = 'WindowGlass'; // Name it for performance mode handling
+    windowPane.name = 'WindowGlass';
     scene.add(windowPane);
 
-    // 3. Side walls (with door openings)
-    // Door width about 8, located around z = -5.
-    // Side walls are divided into: back half (solid) and front half (solid), with a gap in the middle for the door.
-
-    // Left wall (x = -15)
-    // Back half (z: 15 to -1)
+    // Left wall
     const leftWallBack = new THREE.Mesh(new THREE.PlaneGeometry(16, 15, 100, 100), wallMat);
     leftWallBack.rotation.y = Math.PI / 2;
-    leftWallBack.position.set(-15, 7.5, 7); // Center point calculation: (15 + -1)/2 = 7
+    leftWallBack.position.set(-15, 7.5, 7); 
     scene.add(leftWallBack);
     
-    // Front half (z: -9 to -15)
     const leftWallFront = new THREE.Mesh(new THREE.PlaneGeometry(6, 15, 100, 100), wallMat);
     leftWallFront.rotation.y = Math.PI / 2;
     leftWallFront.position.set(-15, 7.5, -12);
     scene.add(leftWallFront);
 
-    // Right wall (x = 15) - same logic
+    // Right wall
     const rightWallBack = new THREE.Mesh(new THREE.PlaneGeometry(16, 15, 100, 100), wallMat);
     rightWallBack.rotation.y = -Math.PI / 2;
     rightWallBack.position.set(15, 7.5, 7);
@@ -340,8 +267,7 @@ function init() {
     rightWallFront.position.set(15, 7.5, -12);
     scene.add(rightWallFront);
 
-    // --- C. External corridor structure ---
-    // To prevent players from seeing the void through the glass, add two walls to the corridor
+    // External corridor
     const hallLeft = new THREE.Mesh(new THREE.PlaneGeometry(20, 15, 100, 100), wallMat);
     hallLeft.rotation.y = Math.PI / 2;
     hallLeft.position.set(-25, 7.5, -13);
@@ -352,35 +278,24 @@ function init() {
     hallRight.position.set(25, 7.5, -13);
     scene.add(hallRight);
     
-    // Corridor end wall
     const hallBack = new THREE.Mesh(new THREE.PlaneGeometry(50, 15, 100, 100), wallMat);
     hallBack.position.set(0, 7.5, -35);
     scene.add(hallBack);
 
-    // 4. Door system (placed in the side wall openings reserved earlier)
-    // Door center roughly at z = -5
-    // Pass in doorMat
+    // 4. Door system
     leftDoor = createDoor(-15, doorMat);  
     rightDoor = createDoor(15, doorMat);
-    // Right door does not need initial rotation, closed state is rotation.y = 0 
 
     // 5. Lighting system
-    
-    // --- A. Ambient atmosphere (very dark) ---
-    // Fog changed to pure black to simulate deep darkness
     scene.fog = new THREE.FogExp2(0x000000, 0.03); 
     
-    // Ambient light set to very faint deep blue (moonlight feel), almost invisible, just to prevent shadows from becoming pitch black
     const ambient = new THREE.AmbientLight(0x050510, 0.09); 
     scene.add(ambient);
 
-    // --- B. Corridor light (ghost background light) ---
-    // Dimmed and limited range to make the ghost faintly visible in the distance
     const hallLight = new THREE.PointLight(0x88ff88, 0.5, 20, 2); 
     hallLight.position.set(0, 10, -20);
     scene.add(hallLight);
 
-    // --- C. Flickering desk lamp inside the room ---
     const lampGroup = new THREE.Group();
     const shade = new THREE.Mesh(
         new THREE.ConeGeometry(2, 1, 32, 1, true),
@@ -390,85 +305,51 @@ function init() {
     lampGroup.add(shade);
     
     bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2), bulbMat); // Bulb made smaller
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2), bulbMat);
     bulb.position.y = 13.5;
     lampGroup.add(bulb);
     scene.add(lampGroup);
 
-    // SpotLight instead of PointLight to simulate the lampshade's downward spotlight effect
-    ceilingLight = new THREE.SpotLight(0xffaa00, 0, 30, Math.PI / 6, 1, 1); //distance=30 (enough to reach the floor), decay=1 (physical decay)
+    ceilingLight = new THREE.SpotLight(0xffaa00, 0, 30, Math.PI / 6, 1, 1); 
     ceilingLight.position.set(0, 13.5, 0);
     ceilingLight.castShadow = true;
-    // Shadow bias to reduce artifacts
     ceilingLight.shadow.bias = -0.0001; 
     scene.add(ceilingLight);
 
-
-    // --- D. Player flashlight (core light source) ---
     flashLight = new THREE.SpotLight(0xffffff, 0); 
-    flashLight.angle = Math.PI / 10; // Spotlight cone angle smaller, more focused (about 22 degrees)
-    flashLight.penumbra = 0.2;      // Edges slightly softer to simulate a real flashlight
-    flashLight.decay = 2;           // Quickly dims with distance
-    flashLight.distance = 100;       // Range
+    flashLight.angle = Math.PI / 10; 
+    flashLight.penumbra = 0.2;      
+    flashLight.decay = 2;           
+    flashLight.distance = 100;       
     flashLight.castShadow = true;
     
-    // Note: Changed to scene.add here because flashlight.js will manually update its position
     scene.add(flashLight); 
-    scene.add(flashLight.target); // target also needs to be added to the scene
+    scene.add(flashLight.target); 
     
     scene.add(camera);
 
     flashlightSystem = new FlashlightSystem(camera, flashLight);
 
-    initEnemy(scene, performanceMode); // Pass performanceMode
+    initEnemy(scene, performanceMode);
     setupInputs();
     window.addEventListener('resize', onWindowResize, false);
 }
 
-function createDoor(xPos, material) { // Add material parameter
-    const doorGroup = new THREE.Group();
-    
-    // Door panel width 8, height 14, thickness 1
-    // UV mapping of BoxGeometry can sometimes stretch on the sides, but usually works fine for mesh textures
-    const doorGeo = new THREE.BoxGeometry(1, 14, 8);
-    
-    // Use the passed-in PBR material, or default if not provided (to prevent errors)
-    const useMat = material || new THREE.MeshStandardMaterial({ color: 0x333333 });
-    
-    const doorMesh = new THREE.Mesh(doorGeo, useMat);
-    
-    // Enable shadows
-    doorMesh.castShadow = true;
-    doorMesh.receiveShadow = true;
-
-    if (xPos < 0) {
-        doorMesh.position.z = 4;
-    } else {
-        doorMesh.position.z = 4;
-    }
-    
-    doorGroup.add(doorMesh);
-    doorGroup.position.set(xPos, 6, -1);
-    scene.add(doorGroup);
-    return doorGroup;
-}
-
-// Create the Toggle Function
 function togglePerformanceMode() {
     performanceMode = !performanceMode;
     const overlayStatus = document.getElementById('overlay-status');
     
+    // 1. update particle quality
     updateParticleQuality(scene, performanceMode);
 
     if (performanceMode) {
-        // --- RETRO MODE ON ---
-        
-        // 1. Pixelate: Set render size to half of window, but stretch CSS to full
+        // --- PROTOTYPE MODE ---
+        // Lower resolution (1/4)
         renderer.setSize(window.innerWidth / 4, window.innerHeight / 4, false);
         renderer.domElement.style.width = "100%";
         renderer.domElement.style.height = "100%";
         
-        // 2. Disable Shadows (Huge FPS boost)
+        // Disable shadows
         renderer.shadowMap.enabled = false;
         scene.traverse((child) => {
             if (child.isMesh) {
@@ -480,10 +361,7 @@ function togglePerformanceMode() {
             }
         });
 
-        // 3. Disable Fog (Optional, makes it look clearer/older)
-        // scene.fog.density = 0;
-
-        console.log("MODE: PROTOTYPE (LOW RES)");
+        console.log("MODE: PROTOTYPE");
         if(overlayStatus) {
             overlayStatus.innerText = "SYSTEM: SAFE MODE (LOW RES)";
             overlayStatus.style.display = 'block';
@@ -492,15 +370,13 @@ function togglePerformanceMode() {
 
     } else {
         // --- HIGH QUALITY MODE ---
-        
         renderer.setSize(window.innerWidth, window.innerHeight, true);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         
         scene.traverse((child) => {
-            // Re-enable shadows based on your specific logic
-            // This is a rough re-enable, specific objects might need tuning
             if (child.isMesh && child.name !== 'Skybox') { 
+                // [FIX] Prevent glass from casting/receiving shadows
                 if (child.name === 'WindowGlass') {
                     child.castShadow = false;
                     child.receiveShadow = false;
@@ -523,99 +399,187 @@ function togglePerformanceMode() {
     }
 }
 
+function createDoor(xPos, material) {
+    const doorGroup = new THREE.Group();
+    const doorGeo = new THREE.BoxGeometry(1, 14, 8);
+    const useMat = material || new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const doorMesh = new THREE.Mesh(doorGeo, useMat);
+    doorMesh.castShadow = true;
+    doorMesh.receiveShadow = true;
+
+    if (xPos < 0) {
+        doorMesh.position.z = 4;
+    } else {
+        doorMesh.position.z = 4;
+    }
+    
+    doorGroup.add(doorMesh);
+    doorGroup.position.set(xPos, 6, -1);
+    scene.add(doorGroup);
+    return doorGroup;
+}
+
 function setupInputs() {
     const overlay = document.getElementById('overlay');
-
-    // 1. Unified Start Logic (Mouse & Touch)
-    const startGame = () => {
+    
+    // --- 1. Start Game Logic (PC & Mobile) ---
+    overlay.addEventListener('click', () => { 
         if (gameState.isGameOver) {
             restartGame();
             return;
         }
-        
-        if (window.innerWidth > 1024) {
-            // Attempt pointer lock (PC)
-            document.body.requestPointerLock();
-        } else {
+
+        // Check if device is likely mobile (touch capable)
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+        if (isTouchDevice) {
+            // Mobile: Start game immediately, show controls
             gameState.isPlaying = true;
             overlay.style.display = 'none';
-            overlayText.innerText = "";
+            // Ensure mobile controls are visible (CSS handles this, but good to be safe)
+            const mobileControls = document.getElementById('mobile-controls');
+            if(mobileControls) mobileControls.style.display = 'block';
+            const btnProto = document.getElementById('btn-proto');
+            if(btnProto) btnProto.style.display = 'flex';
+        } else {
+            // PC: Request pointer lock
+            document.body.requestPointerLock(); 
         }
-        
-    };
+    });
 
-    overlay.addEventListener('click', startGame);
-    overlay.addEventListener('touchstart', (e) => {
-        // Prevent ghost clicks
-        e.preventDefault(); 
-        startGame();
-    }, { passive: false });
-
-    // 2. PC Pointer Lock Events
+    // Pointer Lock Change (PC Only)
     document.addEventListener('pointerlockchange', () => {
         if (document.pointerLockElement === document.body) {
             gameState.isPlaying = true;
             overlay.style.display = 'none';
         } else {
-            // Only pause if we are NOT on mobile (mobile doesn't use pointer lock)
-            // Simple check: if screen width is large, assume PC
-            if (window.innerWidth > 1024) {
-                gameState.isPlaying = false;
-                overlay.style.display = 'flex';
-                if (!gameState.isGameOver) {
-                    document.getElementById('overlay-text').innerText = "PAUSED";
-                }
+            gameState.isPlaying = false;
+            overlay.style.display = 'flex';
+            if (!gameState.isGameOver) {
+                document.getElementById('overlay-text').innerText = "PAUSED";
             }
         }
     });
 
-    // 3. Camera Control (PC Mouse)
+    // --- 2. Camera Controls (Look) ---
+
+    // PC: Mouse Movement
     document.addEventListener('mousemove', (event) => {
         if (!gameState.isPlaying) return;
-        // Only rotate if locked (PC) OR if we are forcing play state
-        if (document.pointerLockElement === document.body || window.innerWidth <= 1024) {
-             // On PC this works via pointer lock. On mobile we use touchmove below.
-             if (document.pointerLockElement === document.body) {
-                rotateCamera(event.movementX, event.movementY);
-             }
-        }
+        camera.rotation.y -= event.movementX * 0.002;
+        camera.rotation.x -= event.movementY * 0.002;
+        camera.rotation.x = Math.max(-1, Math.min(1, camera.rotation.x));
     });
 
-    // 4. Camera Control (Mobile Touch Drag)
+    // Mobile: Touch Movement
     document.addEventListener('touchstart', (e) => {
         if (!gameState.isPlaying) return;
-        if (e.target.classList.contains('touch-btn')) return; // Don't look if hitting a button
-        
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-    });
+        touchStartX = e.touches[0].pageX;
+        touchStartY = e.touches[0].pageY;
+        previousTouchX = touchStartX;
+        previousTouchY = touchStartY;
+    }, { passive: false });
 
     document.addEventListener('touchmove', (e) => {
         if (!gameState.isPlaying) return;
-        if (e.target.classList.contains('touch-btn')) return; 
+        
+        // Prevent default scrolling only if it's not on a button
+        // (But actually, we want to prevent scroll everywhere on the game canvas)
+        if(e.cancelable) e.preventDefault(); 
 
-        const touchX = e.touches[0].clientX;
-        const touchY = e.touches[0].clientY;
+        const touchX = e.touches[0].pageX;
+        const touchY = e.touches[0].pageY;
 
-        const deltaX = touchX - touchStartX;
-        const deltaY = touchY - touchStartY;
+        const deltaX = touchX - previousTouchX;
+        const deltaY = touchY - previousTouchY;
 
-        // Sensitivity factor
-        rotateCamera(deltaX * 3, deltaY * 3);
+        // Sensitivity factor for touch
+        const touchSens = 0.005;
 
-        touchStartX = touchX;
-        touchStartY = touchY;
-    });
+        camera.rotation.y -= deltaX * touchSens;
+        camera.rotation.x -= deltaY * touchSens;
+        
+        camera.rotation.x = Math.max(-1, Math.min(1, camera.rotation.x));
 
-    // 5. Keyboard Controls
+        previousTouchX = touchX;
+        previousTouchY = touchY;
+    }, { passive: false });
+
+
+    // --- 3. Door Controls ---
+
+    // Function to handle Left Door Logic
+    const toggleLeftDoor = () => {
+        if (!gameState.isPlaying || gameState.isGameOver) return;
+        if (gameState.leftBroken) {
+            console.log("Left door is BROKEN!");
+            return;
+        }
+        if (gameState.leftOpen && isGhostBlockingDoor('left')) {
+            triggerDoorBreak('left');
+        } else {
+            gameState.leftOpen = !gameState.leftOpen;
+            if (!gameState.leftOpen && !gameState.rightOpen) gameState.rightOpen = true;
+            updateDoorVisuals(); 
+        }
+    };
+
+    // Function to handle Right Door Logic
+    const toggleRightDoor = () => {
+        if (!gameState.isPlaying || gameState.isGameOver) return;
+        if (gameState.rightBroken) {
+            console.log("Right door is BROKEN!");
+            return;
+        }
+        if (gameState.rightOpen && isGhostBlockingDoor('right')) {
+            triggerDoorBreak('right');
+        } else {
+            gameState.rightOpen = !gameState.rightOpen;
+            if (!gameState.rightOpen && !gameState.leftOpen) gameState.leftOpen = true;
+            updateDoorVisuals(); 
+        }
+    };
+
+    // PC: Keyboard
     document.addEventListener('keydown', (e) => {
         if (!gameState.isPlaying || gameState.isGameOver) return;
-        if(e.code === 'KeyQ') handleDoorAction('left');
-        if(e.code === 'KeyE') handleDoorAction('right');
+        if(e.code === 'KeyQ') toggleLeftDoor();
+        if(e.code === 'KeyE') toggleRightDoor();
         if(e.code === 'KeyP') togglePerformanceMode();
     });
 
-    // 6. Mouse Flashlight
+    // Mobile: Touch Buttons
+    const btnLeft = document.getElementById('btn-left');
+    if (btnLeft) {
+        btnLeft.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent phantom mouse clicks
+            e.stopPropagation(); // Stop event bubbling
+            toggleLeftDoor();
+        }, { passive: false });
+    }
+
+    const btnRight = document.getElementById('btn-right');
+    if (btnRight) {
+        btnRight.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleRightDoor();
+        }, { passive: false });
+    }
+
+    const btnProto = document.getElementById('btn-proto');
+    if (btnProto) {
+        btnProto.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePerformanceMode();
+        }, { passive: false });
+    }
+
+
+    // --- 4. Flashlight Controls ---
+
+    // PC: Mouse Click
     document.addEventListener('mousedown', (e) => { 
         if(gameState.isPlaying) flashlightSystem.pressButton();
     });
@@ -623,151 +587,74 @@ function setupInputs() {
         if(gameState.isPlaying) flashlightSystem.releaseButton();
     });
 
-    // --- 7. Mobile On-Screen Buttons ---
-    
-    // Helper to prevent default touch actions (scrolling/zooming)
-    const bindTouch = (id, startAction, endAction) => {
-        const el = document.getElementById(id);
-        if(!el) return;
-        
-        el.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // Stop double-firing click
-            if(gameState.isPlaying && !gameState.isGameOver) startAction();
-        });
-        
-        if(endAction) {
-            el.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                if(gameState.isPlaying && !gameState.isGameOver) endAction();
-            });
-        }
-    };
+    // Mobile: Touch Button
+    const btnFlash = document.getElementById('btn-flash');
+    if (btnFlash) {
+        btnFlash.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(gameState.isPlaying) flashlightSystem.pressButton();
+        }, { passive: false });
 
-    // Bind Buttons
-    bindTouch('btn-left', () => handleDoorAction('left'));
-    bindTouch('btn-right', () => handleDoorAction('right'));
-    bindTouch('btn-proto', () => togglePerformanceMode());
-    
-    // Flashlight (Hold/Release behavior)
-    bindTouch('btn-flash', 
-        () => flashlightSystem.pressButton(), 
-        () => flashlightSystem.releaseButton()
-    );
-}
-
-// --- Helper Functions ---
-
-function rotateCamera(moveX, moveY) {
-    camera.rotation.y -= moveX * 0.002;
-    camera.rotation.x -= moveY * 0.002;
-    camera.rotation.x = Math.max(-1, Math.min(1, camera.rotation.x));
-}
-
-function handleDoorAction(side) {
-    // Logic extracted from keydown event
-    const isLeft = side === 'left';
-    
-    // 1. Broken Check
-    if ((isLeft && gameState.leftBroken) || (!isLeft && gameState.rightBroken)) {
-        console.log(`${side} door is BROKEN!`);
-        return;
-    }
-
-    // 2. Door Break Check (Ghost Blocking)
-    const isOpen = isLeft ? gameState.leftOpen : gameState.rightOpen;
-    
-    if (isOpen && isGhostBlockingDoor(side)) {
-        triggerDoorBreak(side);
-    } else {
-        // 3. Normal Toggle
-        if (isLeft) {
-            gameState.leftOpen = !gameState.leftOpen;
-            if (!gameState.leftOpen && !gameState.rightOpen) gameState.rightOpen = true; // Mutual exclusion
-        } else {
-            gameState.rightOpen = !gameState.rightOpen;
-            if (!gameState.rightOpen && !gameState.leftOpen) gameState.leftOpen = true;
-        }
-        updateDoorVisuals(); 
+        btnFlash.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(gameState.isPlaying) flashlightSystem.releaseButton();
+        }, { passive: false });
     }
 }
 
 function triggerDoorBreak(side) {
     console.log(`CRITICAL: ${side} DOOR BROKEN!`);
     
-    // 1. Mark the door as broken
     if (side === 'left') gameState.leftBroken = true;
     if (side === 'right') gameState.rightBroken = true;
 
-    // 2. The door is forced to remain "open" (because it's broken and can't be closed)
     if (side === 'left') gameState.leftOpen = true;
     if (side === 'right') gameState.rightOpen = true;
 
-    // 3. Notify the ghost to retreat
     onGhostHitByDoor();
-
-    // 4. Update visuals
     updateDoorVisuals();
 
-    // 5. Screen shake feedback (simulate impact)
+    // Screen shake
     const shakeIntensity = 0.5;
     const startShake = Date.now();
-    
-    // Save original position
     const originalX = camera.position.x;
     const originalY = camera.position.y;
     
     const shakeInterval = setInterval(() => {
         const elapsed = Date.now() - startShake;
-        if (elapsed > 500) { // Shake for 0.5 seconds
+        if (elapsed > 500) { 
             clearInterval(shakeInterval);
-            // Restore to original position
             camera.position.x = originalX;
             camera.position.y = originalY;
             return;
         }
-        // Shake around original position
         camera.position.x = originalX + (Math.random() - 0.5) * shakeIntensity;
         camera.position.y = originalY + (Math.random() - 0.5) * shakeIntensity;
     }, 16);
 }
 
 function updateDoorVisuals() {
-    // Helper function: handle visual state of a single door
     const updateSingleDoor = (doorGroup, isOpen, isBroken, sideMultiplier) => {
         if (isBroken) {
-            // --- Broken state ---
-            // 1. Door appears half-open and stuck (45 degrees)
-            // sideMultiplier: 1 for left door, -1 for right door, controls rotation direction
             doorGroup.rotation.y = sideMultiplier * (Math.PI / 4); 
-            
-            // 2. Door panel is tilted (simulate hinge break)
-            doorGroup.rotation.z = sideMultiplier * 0.1; // Slightly tilted
-            doorGroup.position.y = 5.8; // Slightly dropped (original height is 6)
-
+            doorGroup.rotation.z = sideMultiplier * 0.1; 
+            doorGroup.position.y = 5.8; 
         } else {
-            // --- Normal state ---
-            // Restore position and Z-axis rotation (in case previously broken and game reset)
             doorGroup.rotation.z = 0;
             doorGroup.position.y = 6;
             doorGroup.children[0].material.color.setHex(0xffffff);
 
-            // Normal open/close logic
-            // Left door closed: -PI, Right door closed: PI
             const closedRot = sideMultiplier * -Math.PI;
             doorGroup.rotation.y = isOpen ? 0 : closedRot;
         }
     };
 
-    // Update left door (sideMultiplier = 1)
-    // Left door closed: -PI
     updateSingleDoor(leftDoor, gameState.leftOpen, gameState.leftBroken, 1);
 
-    // Update right door (sideMultiplier = -1)
-    // Note: original logic right door closed is PI.
-    // To reuse the function, we can pass isOpen ? 0 : Math.PI, or write manually:
-    
     if (gameState.rightBroken) {
-        rightDoor.rotation.y = -Math.PI / 4; // Tilted to one side
+        rightDoor.rotation.y = -Math.PI / 4; 
         rightDoor.rotation.z = -0.1;
         rightDoor.position.y = 5.8;
         rightDoor.children[0].material.color.setHex(0xffffff);
@@ -778,24 +665,22 @@ function updateDoorVisuals() {
         rightDoor.rotation.y = gameState.rightOpen ? 0 : Math.PI;
     }
 
-    // Update UI
+    // Update UI (Supports both PC text and Mobile buttons visually if needed, though buttons are static)
     const uiLeft = document.getElementById('status-left');
     const uiRight = document.getElementById('status-right');
     
-    // Update left UI
     if (gameState.leftBroken) {
-        uiLeft.className = 'door-status open'; // Style uses red "open"
-        uiLeft.innerText = "BROKEN";           // Text shows broken
-        uiLeft.style.color = "#880000";        // Dark red text
+        uiLeft.className = 'door-status open'; 
+        uiLeft.innerText = "BROKEN";           
+        uiLeft.style.color = "#880000";        
         uiLeft.style.borderColor = "#880000";
     } else {
-        uiLeft.style.color = ""; // Restore default
+        uiLeft.style.color = ""; 
         uiLeft.style.borderColor = "";
         uiLeft.className = `door-status ${gameState.leftOpen ? 'open' : 'closed'}`;
         uiLeft.innerText = gameState.leftOpen ? "OPEN" : "CLOSED";
     }
 
-    // Update right UI
     if (gameState.rightBroken) {
         uiRight.className = 'door-status open';
         uiRight.innerText = "BROKEN";
@@ -813,12 +698,19 @@ function onGameOver() {
     console.log("GAME OVER!");
     gameState.isPlaying = false;
     gameState.isGameOver = true;
-    document.exitPointerLock();
+    
+    // Attempt to unlock pointer if on PC
+    if(document.pointerLockElement) document.exitPointerLock();
+    
     const overlay = document.getElementById('overlay');
     const overlayText = document.getElementById('overlay-text');
     overlay.style.display = 'flex';
     overlayText.innerText = "GAME OVER - Click to Restart";
     overlayText.style.color = "red";
+    
+    // Hide mobile controls on game over
+    const mobileControls = document.getElementById('mobile-controls');
+    if(mobileControls) mobileControls.style.display = 'none';
 }
 
 function restartGame() {
@@ -834,16 +726,14 @@ function restartGame() {
     camera.position.set(0, 5, 5);
     camera.rotation.set(0, 0, 0);
     
-    // Restore UI styles
     const uiLeft = document.getElementById('status-left');
     const uiRight = document.getElementById('status-right');
     uiLeft.style.color = ""; uiLeft.style.borderColor = "";
     uiRight.style.color = ""; uiRight.style.borderColor = "";
     
-    //reset flashlight battery
     flashlightSystem.battery = 6;
     flashlightSystem.isDepleted = false;
-    if(flashlightSystem.isOn) flashlightSystem.toggle(); // Turn off
+    if(flashlightSystem.isOn) flashlightSystem.toggle(); 
     
     resetEnemy();
     updateDoorVisuals();
@@ -851,6 +741,9 @@ function restartGame() {
     const overlayText = document.getElementById('overlay-text');
     overlayText.innerText = "CLICK TO START";
     overlayText.style.color = "red";
+
+    const overlay = document.getElementById('overlay');
+    overlay.style.display = 'flex';
 }
 
 function onWindowResize() {
@@ -864,29 +757,20 @@ function animate() {
     const dt = clock.getDelta();
     const time = clock.getElapsedTime();
 
-    // Light flicker logic
     if (Math.random() > 0.95) {
-        // Flicker dim
-        ceilingLight.intensity = Math.random() * 5; // When dim
+        ceilingLight.intensity = Math.random() * 5; 
         bulbMat.color.setHex(0x331100);
     } else {
-        // Normal brightness (because decay:1 is used, intensity needs to be around 20-50 to be bright enough)
         ceilingLight.intensity = 50 + Math.sin(time * 10) * 15; 
         bulbMat.color.setHex(0xffaa00);
     }
 
-    // Update flashlight system (battery, animation)
-    // Note: we have handed over the state management of gameState.flashlightOn to flashlightSystem.isOn
     if (flashlightSystem) {
         flashlightSystem.update(dt);
-        
-        // Sync the flashlight on/off state back to gameState for Enemy.js to read
-        // Because enemy.js uses gameState.flashlightOn to determine if it is illuminated
         gameState.flashlightOn = flashlightSystem.isOn; 
     }
 
     if (gameState.isPlaying && !gameState.isGameOver) {
-        // --- Pass flashLight parameter ---
         updateEnemy(dt, camera, flashLight, gameState, onGameOver);
     }
 

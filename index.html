@@ -6,6 +6,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     
     <style>
         :root {
@@ -22,6 +23,9 @@
             font-family: 'Share Tech Mono', monospace; 
             user-select: none; 
             color: var(--phosphor-main);
+            /* Disable long press text selection and highlight on mobile */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
         }
 
         /* --- CRT / CCTV Effects --- */
@@ -138,6 +142,83 @@
             color: var(--phosphor-main);
         }
 
+        /* --- Mobile Controls (Touch HUD) --- */
+        #mobile-controls {
+            position: fixed;
+            bottom: 30px;
+            left: 0;
+            width: 100%;
+            height: 120px;
+            pointer-events: none; /* Let clicks pass through empty areas */
+            display: none; /* Hidden by default on desktop */
+            z-index: 80; /* Above scanlines */
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+
+        .control-btn {
+            pointer-events: auto; /* Buttons themselves are clickable */
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            
+            /* Stylize buttons */
+            background: rgba(0, 20, 0, 0.4);
+            border: 2px solid var(--phosphor-main);
+            color: var(--phosphor-main);
+            box-shadow: 0 0 10px var(--phosphor-dim), inset 0 0 10px rgba(84, 106, 86, 0.3);
+            text-shadow: 0 0 5px var(--phosphor-main);
+            
+            /* Layout */
+            border-radius: 10px; /* Slightly rounded corners */
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            touch-action: manipulation;
+            transition: all 0.1s;
+        }
+
+        .control-btn:active {
+            background: var(--phosphor-main);
+            color: #000;
+            box-shadow: 0 0 20px var(--phosphor-main);
+        }
+
+        .btn-subtext {
+            font-size: 10px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        /* Button positions */
+        #btn-left { left: 30px; bottom: 20px; }
+        #btn-right { right: 30px; bottom: 20px; }
+        /* Flashlight on the right side, slightly inward for thumb convenience */
+        #btn-flash { 
+            right: 130px; 
+            bottom: 20px; 
+            border-color: #ffaa00; 
+            color: #ffaa00; 
+            text-shadow: 0 0 5px #ffaa00;
+        }
+        #btn-flash:active { background: #ffaa00; color: #000; }
+
+        /* Media Query: for mobile/tablet show virtual buttons and hide keyboard hints */
+        @media (max-width: 1024px) {
+            #mobile-controls { display: block; }
+            #btn-proto { display: flex !important; }
+            #controls { display: none; } /* Hide keyboard hints */
+            
+            /* Adjust door status display to avoid being covered by fingers */
+            #door-hud { margin-top: 5px; gap: 20px; }
+            .door-panel { padding: 5px 10px; min-width: 100px; }
+        }
+
+
         /* --- Intro / Pause Overlay --- */
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -152,6 +233,7 @@
 
         .terminal-window {
             width: 600px;
+            max-width: 90%; /* adjust to width of phone */
             border: 2px solid var(--phosphor-main);
             padding: 20px;
             background: rgba(0, 10, 0, 0.9);
@@ -192,79 +274,11 @@
             transform: translate(-50%, -50%);
             z-index: 40;
             border-radius: 50%;
+            pointer-events: none;
         }
 
         #overlay-status { font-size: 2rem; color: var(--alert-red); margin-bottom: 10px; display: none;}
 
-        /* --- Mobile Controls --- */
-        #mobile-controls {
-            display: none; /* Hidden by default on PC */
-            position: absolute;
-            bottom: 20px;
-            left: 0;
-            width: 100%;
-            height: 120px;
-            z-index: 60;
-            pointer-events: none; /* Let touches pass through gaps */
-            justify-content: space-between;
-            padding: 0 20px;
-            box-sizing: border-box;
-        }
-
-        /* Show controls on small screens OR touch devices */
-        @media (max-width: 1024px), (hover: none) {
-            #mobile-controls { display: flex; }
-            .touch-btn-fps { display: block !important; }
-        }
-
-        .touch-btn {
-            width: 80px;
-            height: 80px;
-            background: rgba(84, 106, 86, 0.3); /* Phosphor dim color */
-            border: 2px solid var(--phosphor-main);
-            border-radius: 50%;
-            color: var(--phosphor-main);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 1.2rem;
-            pointer-events: auto; /* Re-enable clicks on buttons */
-            user-select: none;
-            backdrop-filter: blur(2px);
-            box-shadow: 0 0 10px rgba(175, 190, 162, 0.2);
-        }
-    
-        .touch-btn:active {
-            background: var(--phosphor-main);
-            color: #000;
-        }
-
-        /* Specific Button Positions */
-        .control-group {
-            display: flex;
-            gap: 20px;
-            align-items: flex-end;
-        }
-
-        #btn-flash {
-            width: 100px;
-            height: 100px;
-            border-color: var(--alert-red);
-            color: var(--alert-red);
-            font-size: 1.5rem;
-        }
-        /* Prototype Mode Button (Top Right) */
-        .touch-btn-fps {
-            display: none;
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 50px;
-            height: 50px;
-            font-size: 0.8rem;
-            z-index: 61;
-        }
     </style>
 
     <script type="importmap">
@@ -290,11 +304,11 @@
 
         <div id="door-hud">
             <div class="door-panel">
-                <span class="door-label">SEC_DOOR_L [Q]</span>
+                <span class="door-label">SEC_DOOR_L</span>
                 <span id="status-left" class="door-status open">OPEN</span>
             </div>
             <div class="door-panel">
-                <span class="door-label">SEC_DOOR_R [E]</span>
+                <span class="door-label">SEC_DOOR_R</span>
                 <span id="status-right" class="door-status open">OPEN</span>
             </div>
         </div>
@@ -304,23 +318,32 @@
             <span class="key">Q</span> LEFT DOOR // 
             <span class="key">E</span> RIGHT DOOR // 
             <span class="key">LEFT CLICK</span> FLASHLIGHT //
-            <span class="key">P</span> PROTOTYPE MODE (FPS BOOST) //
+            <span class="key">P</span> PERFORMANCE MODE //
             <span class="key">MOUSE</span> LOOK
         </div>
     </div>
 
     <div id="mobile-controls">
-        <div class="control-group">
-            <div id="btn-left" class="touch-btn">L</div>
+        <div id="btn-left" class="control-btn">
+            DOOR L
+            <span class="btn-subtext">TOGGLE</span>
         </div>
-    
-        <div id="btn-flash" class="touch-btn">LIGHT</div>
-    
-        <div class="control-group">
-            <div id="btn-right" class="touch-btn">R</div>
+        
+        <div id="btn-flash" class="control-btn">
+            LIGHT
+            <span class="btn-subtext">HOLD</span>
+        </div>
+
+        <div id="btn-right" class="control-btn">
+            DOOR R
+            <span class="btn-subtext">TOGGLE</span>
         </div>
     </div>
-    <div id="btn-proto" class="touch-btn touch-btn-fps">FPS</div>
+
+    <div id="btn-proto" class="control-btn" style="top: 20px; right: 20px; bottom: auto; width: 60px; height: 60px; display: none;">
+        FPS
+        <span class="btn-subtext">MODE</span>
+    </div>
 
     <div id="overlay">
         <div class="terminal-window">
@@ -339,6 +362,8 @@
                 2. <span class="warning">DEFENSE:</span> Entity reacts to light. Shine flashlight directly to banish.<br>
                 3. <span class="warning">POWER:</span> Flashlight battery is limited. Use sparingly.<br>
                 4. <span class="warning">DOORS:</span> Do not keep doors closed unnecessarily. Systems are old.<br>
+                <br>
+                <span style="color:#afbea2; font-size: 0.9em;">> MOBILE DETECTED: Tap screen to Start. Use on-screen buttons to operate. Drag screen to look.</span>
             </div>
 
             <div class="start-prompt" id="overlay-text">
@@ -359,8 +384,6 @@
         updateClock();
 
         // Handle overlay text changes based on game state (since main.js modifies overlay-text)
-        // We use a MutationObserver to watch for changes main.js makes, 
-        // allowing us to keep the fancy CSS while main.js controls logic.
         const targetNode = document.getElementById('overlay-text');
         const observer = new MutationObserver((mutationsList) => {
             for(const mutation of mutationsList) {
