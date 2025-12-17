@@ -370,12 +370,29 @@ export function onGhostHitByDoor() {
     }
 }
 
+export function updateParticleQuality(scene, isLowSpec) {
+    if (particlesMesh) {
+        // remove existing particles
+        scene.remove(particlesMesh);
+        
+        // memory cleanup
+        if (particlesMesh.geometry) particlesMesh.geometry.dispose();
+        if (particlesMesh.material) particlesMesh.material.dispose();
+        
+        particlesMesh = null;
+    }
+
+    // Create new particles with updated quality
+    console.log(`Updating particles: ${isLowSpec ? 'Low Quality (5000)' : 'High Quality (800000)'}`);
+    createAtmosphereParticles(scene, isLowSpec);
+}
+
 function createAtmosphereParticles(scene, isLowSpec = false) {
     const geometry = new THREE.BufferGeometry();
     const vertices = [];
 
     // Now 'isLowSpec' is defined and valid
-    const count = isLowSpec ? 5000 : 50000; 
+    const count = isLowSpec ? 5000 : 800000; 
 
     for (let i = 0; i < count; i++) {
         vertices.push((Math.random() - 0.5) * 80); 

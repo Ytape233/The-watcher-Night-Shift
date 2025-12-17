@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { FlashlightSystem } from './flashlight.js';
-import { initEnemy, updateEnemy, resetEnemy, isGhostBlockingDoor, onGhostHitByDoor } from './enemy.js';
+import { initEnemy, updateEnemy, resetEnemy, isGhostBlockingDoor, onGhostHitByDoor, updateParticleQuality } from './enemy.js';
 
 // --- Global Variables ---
 let scene, camera, renderer;
@@ -306,6 +306,7 @@ function init() {
     });
     const windowPane = new THREE.Mesh(glassGeo, glassMat);
     windowPane.position.set(0, 7, -15);
+    windowPane.name = 'WindowGlass'; // Name it for performance mode handling
     scene.add(windowPane);
 
     // 3. Side walls (with door openings)
@@ -454,6 +455,8 @@ function togglePerformanceMode() {
     performanceMode = !performanceMode;
     const overlayStatus = document.getElementById('overlay-status');
     
+    updateParticleQuality(scene, performanceMode);
+
     if (performanceMode) {
         // --- RETRO MODE ON ---
         
@@ -495,8 +498,13 @@ function togglePerformanceMode() {
             // Re-enable shadows based on your specific logic
             // This is a rough re-enable, specific objects might need tuning
             if (child.isMesh && child.name !== 'Skybox') { 
-                child.castShadow = true;
-                child.receiveShadow = true;
+                if (child.name === 'WindowGlass') {
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                } else {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
             }
             if (child.isLight && child.intensity > 0) {
                 child.castShadow = true;
